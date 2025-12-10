@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Building2, User, Users, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, Check } from "lucide-react";
@@ -8,22 +8,26 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 const roles = [
   {
-    id: "seeker",
+    id: "client" as AppRole,
     label: "PG Seeker",
     icon: User,
     description: "Find your perfect PG accommodation",
   },
   {
-    id: "owner",
+    id: "owner" as AppRole,
     label: "PG Owner",
     icon: Building2,
     description: "List your property and get tenants",
   },
   {
-    id: "broker",
+    id: "broker" as AppRole,
     label: "Broker",
     icon: Users,
     description: "Partner with us as an agent",
@@ -33,9 +37,11 @@ const roles = [
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const initialRole = searchParams.get("role") || "seeker";
+  const { user, signUp, signIn, isLoading: authLoading } = useAuth();
   
-  const [selectedRole, setSelectedRole] = useState(initialRole);
+  const initialRole = (searchParams.get("role") as AppRole) || "client";
+  
+  const [selectedRole, setSelectedRole] = useState<AppRole>(initialRole);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +54,13 @@ export default function AuthPage() {
     confirmPassword: "",
   });
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate("/");
+    }
+  }, [user, authLoading, navigate]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -56,37 +69,96 @@ export default function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      if (authMode === "signup") {
+        // Validation
+        if (formData.password !== formData.confirmPassword) {
+          toast({
+            title: "Passwords don't match",
+            description: "Please make sure your passwords match",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
 
-    if (authMode === "signup" && formData.password !== formData.confirmPassword) {
+        if (formData.password.length < 6) {
+          toast({
+            title: "Password too short",
+            description: "Password must be at least 6 characters",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        const { error } = await signUp(formData.email, formData.password, {
+          full_name: formData.name,
+          phone: formData.phone,
+          role: selectedRole,
+        });
+
+        if (error) {
+          let errorMessage = error.message;
+          if (error.message.includes("already registered")) {
+            errorMessage = "This email is already registered. Please sign in instead.";
+          }
+          toast({
+            title: "Sign up failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        toast({
+          title: "Account created!",
+          description: "Welcome to PGFinder. You are now logged in.",
+        });
+      } else {
+        // Login
+        const { error } = await signIn(formData.email, formData.password);
+
+        if (error) {
+          let errorMessage = error.message;
+          if (error.message.includes("Invalid login credentials")) {
+            errorMessage = "Invalid email or password. Please try again.";
+          }
+          toast({
+            title: "Login failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully logged in.",
+        });
+      }
+
+      // Navigation will happen automatically via useEffect
+    } catch (error) {
       toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match",
+        title: "Error",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
-      setIsLoading(false);
-      return;
     }
-
-    toast({
-      title: authMode === "login" ? "Welcome back!" : "Account created!",
-      description: authMode === "login" 
-        ? "You have successfully logged in" 
-        : "Your account has been created. Please verify your email.",
-    });
 
     setIsLoading(false);
-
-    // Redirect based on role
-    if (selectedRole === "seeker") {
-      navigate("/");
-    } else if (selectedRole === "owner") {
-      navigate("/owner/dashboard");
-    } else {
-      navigate("/broker/dashboard");
-    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -125,6 +197,7 @@ export default function AuthPage() {
               {roles.map((role) => (
                 <button
                   key={role.id}
+                  type="button"
                   onClick={() => setSelectedRole(role.id)}
                   className={cn(
                     "relative p-4 rounded-xl border-2 text-center transition-all",
@@ -230,6 +303,7 @@ export default function AuthPage() {
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     required
+                    minLength={6}
                   />
                   <button
                     type="button"
@@ -255,6 +329,7 @@ export default function AuthPage() {
                       onChange={handleInputChange}
                       className="pl-10"
                       required
+                      minLength={6}
                     />
                   </div>
                 </div>
@@ -278,41 +353,6 @@ export default function AuthPage() {
               </Button>
             </form>
           </Tabs>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-background text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
-
-          {/* Social Login */}
-          <Button variant="outline" size="lg" className="w-full gap-2">
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Continue with Google
-          </Button>
 
           {/* Terms */}
           <p className="text-center text-sm text-muted-foreground">
@@ -340,12 +380,12 @@ export default function AuthPage() {
         <div className="absolute inset-0 flex items-center justify-center p-16">
           <div className="text-center text-primary-foreground max-w-lg">
             <h2 className="text-4xl font-bold mb-6">
-              {selectedRole === "seeker" && "Find Your Perfect Home Away From Home"}
+              {selectedRole === "client" && "Find Your Perfect Home Away From Home"}
               {selectedRole === "owner" && "Turn Your Property Into Income"}
               {selectedRole === "broker" && "Partner With India's Largest PG Platform"}
             </h2>
             <p className="text-xl opacity-90">
-              {selectedRole === "seeker" && "Discover verified PG accommodations with transparent pricing and hassle-free booking."}
+              {selectedRole === "client" && "Discover verified PG accommodations with transparent pricing and hassle-free booking."}
               {selectedRole === "owner" && "List your property for free and connect with thousands of verified tenants."}
               {selectedRole === "broker" && "Earn commission by helping property owners list and manage their PGs."}
             </p>
