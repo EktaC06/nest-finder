@@ -3,8 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, User, Building2, Users, ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import logo from "@/assets/logo.png";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,13 +44,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Building2 className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold text-foreground">
-            PG<span className="text-primary">Finder</span>
-          </span>
+        <Link to="/" className="flex items-center">
+          <img src={logo} alt="PGFinder" className="h-12 w-auto" />
         </Link>
 
         {/* Desktop Navigation */}
