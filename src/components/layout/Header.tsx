@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, User, Building2, Users, ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import logo from "@/assets/nest-finder-logo.png";
+import logo from "@/assets/pgfinder-logo.svg";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
